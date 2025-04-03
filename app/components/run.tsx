@@ -26,7 +26,6 @@ import {
 } from "@coinbase/onchainkit/identity";
 import { useAccount } from "wagmi";
 //import ArrowSvg from "../svg/ArrowSvg";
-import BaseLogoHorizontal from "../svg/BaseLogoHorizontal";
 
 //const MAX_SCORES = 8;
 const FPS = 60;
@@ -42,16 +41,21 @@ const COLORS = {
 };
 
 // New game constants
-const BULLET_SPEED = 5;
-const ENEMY_SPEED = 1;
-const BULLET_SIZE = 5;
-const ENEMY_SIZE = 50;
-const SHIP_WIDTH = 40;
-const SHIP_HEIGHT = 20;
-const SHIP_Y_POSITION = 450;
+const GAME_WIDTH = 500;
+const GAME_HEIGHT = 300;
+const GROUND_Y = GAME_HEIGHT - 50 + 95 + 35;
+const RUNNER_WIDTH = 30;
+const RUNNER_HEIGHT = 50;
+const RUNNER_X_POSITION = 100;
+const RUNNER_Y_POSITION = GROUND_Y - RUNNER_HEIGHT;
+const OBSTACLE_WIDTH = 25;
+const OBSTACLE_HEIGHT = 40;
+const OBSTACLE_SPEED = 4;
+const GRAVITY = 0.4;
+const JUMP_FORCE = -10;
 
-// Update ship movement speed
-const SHIP_MOVE_SPEED = 20; // Increased from 10
+// Update movement speed
+const RUNNER_MOVE_SPEED = 5;
 
 const GameState = {
   INTRO: 0,
@@ -137,38 +141,6 @@ const LevelMaps: {
     { x1: 0, y1: 0, width: 500, height: 10 },
     { x1: 490, y1: 0, width: 10, height: 500 },
     { x1: 0, y1: 490, width: 500, height: 10 },
-  ],
-  2: [
-    { x1: 0, y1: 0, width: 10, height: 500 },
-    { x1: 0, y1: 0, width: 500, height: 10 },
-    { x1: 490, y1: 0, width: 10, height: 500 },
-    { x1: 0, y1: 490, width: 500, height: 10 },
-    { x1: 250, y1: 0, width: 10, height: 200 },
-    { x1: 250, y1: 300, width: 10, height: 200 },
-  ],
-  3: [
-    { x1: 0, y1: 0, width: 10, height: 500 },
-    { x1: 0, y1: 0, width: 500, height: 10 },
-    { x1: 490, y1: 0, width: 10, height: 500 },
-    { x1: 0, y1: 490, width: 500, height: 10 },
-    { x1: 250, y1: 0, width: 10, height: 200 },
-    { x1: 250, y1: 300, width: 10, height: 200 },
-    { x1: 0, y1: 250, width: 200, height: 10 },
-    { x1: 300, y1: 250, width: 200, height: 10 },
-  ],
-  4: [
-    { x1: 0, y1: 0, width: 10, height: 500 },
-    { x1: 0, y1: 0, width: 500, height: 10 },
-    { x1: 490, y1: 0, width: 10, height: 500 },
-    { x1: 0, y1: 490, width: 500, height: 10 },
-    { x1: 100, y1: 0, width: 10, height: 200 },
-    { x1: 200, y1: 0, width: 10, height: 200 },
-    { x1: 300, y1: 0, width: 10, height: 200 },
-    { x1: 400, y1: 0, width: 10, height: 200 },
-    { x1: 100, y1: 300, width: 10, height: 200 },
-    { x1: 200, y1: 300, width: 10, height: 200 },
-    { x1: 300, y1: 300, width: 10, height: 200 },
-    { x1: 400, y1: 300, width: 10, height: 200 },
   ],
 };
 
@@ -340,10 +312,10 @@ type AwaitingNextLevelProps = {
 function AwaitingNextLevel({ score, level }: AwaitingNextLevelProps) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/70 z-20 m-[10px] mb-[30px]">
-      <h1 className="text-5xl mb-4">LEVEL COMPLETE!</h1>
+      <h1 className="text-5xl mb-4">CONGRATULATION!</h1>
       <Stats score={score} level={level} />
       <p className="absolute bottom-4 text-lg">
-        Press play or space for the next level
+        Press play or enter to play again
       </p>
     </div>
   );
@@ -361,7 +333,7 @@ export function Dead({ score, level, isWin }: DeadProps) {
       <h1 className="text-6xl mb-4">{isWin ? "YOU WON!" : "GAME OVER"}</h1>
       <Stats score={score} level={level} width={250} />
       <p className="text-lg mb-4 absolute bottom-0">
-        Press play or space to play again
+        Press play or enter to play again
       </p>
     </div>
   );
@@ -412,10 +384,15 @@ type IntroProps = {
 function Intro({  }: IntroProps) {
   return (
     <div className="absolute inset-0 flex flex-col items-center bg-white/70 z-20 m-[10px] mb-[30px] pb-6">
-      <div className="absolute top-12">
-        <BaseLogoHorizontal />
+      <div className="absolute top-12 flex items-center justify-center w-full">
+        <div className="flex items-center space-x-8">
+          <h1 className="text-6xl font-bold text-[#0052FF]">R</h1>
+          <h1 className="text-6xl font-bold text-[#0052FF]">U</h1>
+          <h1 className="text-6xl font-bold text-[#0052FF]">N</h1>
+        </div>
+        <h2 className="text-2xl font-bold text-[#0052FF] text-center mt-2 absolute top-16 left-1/2 transform -translate-x-1/2">to the Base Home</h2>
       </div>
-      <div className="absolute bottom-4">Press play or space to start</div>
+      <div className="absolute bottom-4">Press play or enter to start</div>
     </div>
   );
 }
@@ -439,42 +416,55 @@ const useGameLoop = (callback: () => void, dependencies: DependencyList) => {
   }, [...dependencies, callback]);
 };
 
-type Bullet = {
+type Runner = {
   x: number;
   y: number;
+  velocityY: number;
+  isJumping: boolean;
 };
 
-type Enemy = {
+type Obstacle = {
   x: number;
   y: number;
+  width: number;
+  height: number;
+  isSpecial?: boolean;
 };
 
-const Sammy = () => {
+const Run = () => {
   const gameCanvasRef = useRef<HTMLCanvasElement>(null);
   const mapCanvasRef = useRef<HTMLCanvasElement>(null);
-  const sammyCanvasRef = useRef<HTMLCanvasElement>(null);
+  const runnerCanvasRef = useRef<HTMLCanvasElement>(null);
   const scoreCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const levelRef = useRef(1);
+  const startTimeRef = useRef<number | null>(null);
+  const lastObstacleTimeRef = useRef<number | null>(null);
+  const nextObstacleIntervalRef = useRef<number>(1000);
+  const passedObstaclesRef = useRef<Set<string>>(new Set());
 
   const [gameState, setGameState] = useState(GameState.INTRO);
   const [level, setLevel] = useState(1);
   const [score, setScore] = useState({ points: 2000, total: 0 });
-  const [ship, setShip] = useState({
-    x: 250,
-    y: SHIP_Y_POSITION,
+  const [runner, setRunner] = useState<Runner>({
+    x: RUNNER_X_POSITION,
+    y: RUNNER_Y_POSITION,
+    velocityY: 0,
+    isJumping: false
   });
-  const [enemies, setEnemies] = useState<Enemy[]>([]);
-  const [bullets, setBullets] = useState<Bullet[]>([]);
+  const [obstacles, setObstacles] = useState<Obstacle[]>([]);
   const [scale, setScale] = useState<number | null>(null);
   const { konami } = useKonami(gameState);
 
-  const moveShip = useCallback((newX: number) => {
-    setShip(prev => ({
-      ...prev,
-      x: Math.max(0, Math.min(500 - SHIP_WIDTH, newX))
-    }));
-  }, []);
+  const jump = useCallback(() => {
+    if (!runner.isJumping && gameState === GameState.RUNNING) {
+      setRunner(prev => ({
+        ...prev,
+        velocityY: JUMP_FORCE,
+        isJumping: true
+      }));
+    }
+  }, [runner.isJumping, gameState]);
 
   const getStartingScore = useCallback(
     (level: number, adjust = false) => {
@@ -494,31 +484,28 @@ const Sammy = () => {
           return GameState.PAUSED;
         case GameState.PAUSED:
         case GameState.INTRO:
+          startTimeRef.current = performance.now();
+          lastObstacleTimeRef.current = null;
+          nextObstacleIntervalRef.current = 1000;
           return GameState.RUNNING;
         case GameState.WON:
         case GameState.DEAD:
-          setShip({
-            x: 250,
-            y: SHIP_Y_POSITION,
+        case GameState.AWAITINGNEXTLEVEL:
+          // Reset all game state
+          setRunner({
+            x: RUNNER_X_POSITION,
+            y: RUNNER_Y_POSITION,
+            velocityY: 0,
+            isJumping: false
           });
           setScore({ points: getStartingScore(1), total: 0 });
-          setEnemies([]);
-          setBullets([]);
+          setObstacles([]);
           setLevel(1);
-          return GameState.RUNNING;
-        case GameState.AWAITINGNEXTLEVEL:
-          setShip({
-            x: 250,
-            y: SHIP_Y_POSITION,
-          });
-          setScore((prevScore) => ({
-            ...prevScore,
-            points: getStartingScore(levelRef.current + 1),
-          }));
-          setEnemies([]);
-          setBullets([]);
-          setLevel(levelRef.current + 1);
-          return GameState.RUNNING;
+          startTimeRef.current = null;
+          lastObstacleTimeRef.current = null;
+          nextObstacleIntervalRef.current = 1000;
+          // Force a clean restart by first going to intro state
+          return GameState.INTRO;
         default:
           return prev;
       }
@@ -547,17 +534,25 @@ const Sammy = () => {
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.code === "Space") {
+        e.preventDefault(); // Prevent space from triggering any other actions
+        // Make space key function exactly like the jump button
+        if (!runner.isJumping && gameState === GameState.RUNNING) {
+          setRunner(prev => ({
+            ...prev,
+            velocityY: JUMP_FORCE,
+            isJumping: true
+          }));
+        }
+      } else if (e.code === "Enter") {
+        e.preventDefault(); // Prevent enter from triggering any other actions
+        // Make enter key function exactly like the play button
         updateGameState();
-      } else if (e.code === "ArrowLeft") {
-        moveShip(ship.x - SHIP_MOVE_SPEED);
-      } else if (e.code === "ArrowRight") {
-        moveShip(ship.x + SHIP_MOVE_SPEED);
       }
     };
 
     window.addEventListener("keydown", handleKeyPress);
     return () => window.removeEventListener("keydown", handleKeyPress);
-  }, [updateGameState, moveShip, ship.x]);
+  }, [updateGameState, gameState, runner.isJumping]);
 
   const drawMap = useCallback(() => {
     const ctx = mapCanvasRef.current?.getContext("2d");
@@ -565,6 +560,12 @@ const Sammy = () => {
       ctx.clearRect(0, 0, 500, 520);
       ctx.fillStyle = COLORS.white;
       ctx.fillRect(0, 0, 500, 520);
+      
+      // Draw ground
+      ctx.fillStyle = COLORS.blue;
+      ctx.fillRect(0, GROUND_Y, 500, 30);
+      
+      // Draw level obstacles
       LevelMaps[level].forEach((wall) => {
         ctx.fillStyle = COLORS.blue;
         ctx.fillRect(wall.x1, wall.y1, wall.width, wall.height);
@@ -579,74 +580,106 @@ const Sammy = () => {
   }, [drawMap, level, scale]);
 
   const updateGame = useCallback(() => {
-    // Move bullets
-    setBullets(prev => 
-      prev.map(bullet => ({
-        ...bullet,
-        y: bullet.y - BULLET_SPEED
-      })).filter(bullet => bullet.y > 0)
+    // Update runner position with gravity
+    setRunner(prev => {
+      const newVelocityY = prev.velocityY + GRAVITY;
+      const newY = Math.min(GROUND_Y - RUNNER_HEIGHT, prev.y + newVelocityY);
+      const isOnGround = newY >= GROUND_Y - RUNNER_HEIGHT;
+      
+      return {
+        ...prev,
+        y: newY,
+        velocityY: isOnGround ? 0 : newVelocityY,
+        isJumping: !isOnGround
+      };
+    });
+
+    // Move obstacles
+    setObstacles(prev =>
+      prev.map(obstacle => ({
+        ...obstacle,
+        x: obstacle.x - OBSTACLE_SPEED
+      })).filter(obstacle => obstacle.x + obstacle.width > 0)
     );
 
-    // Move enemies
-    setEnemies(prev =>
-      prev.map(enemy => ({
-        ...enemy,
-        y: enemy.y + ENEMY_SPEED
-      })).filter(enemy => enemy.y < 500)
-    );
+    // Create new obstacles with random timing and width
+    const currentTime = performance.now();
+    if (!lastObstacleTimeRef.current) {
+      lastObstacleTimeRef.current = currentTime;
+    }
+    
+    // Only generate new obstacles if less than 13 seconds have passed
+    if (startTimeRef.current) {
+      const elapsedTime = (currentTime - startTimeRef.current) / 1000;
+      
+      // Additional blue obstacle at 13.5 seconds
+      if (elapsedTime >= 13.5 && elapsedTime < 13.6 && !obstacles.some(obs => obs.x === 500)) {
+        setObstacles(prev => [...prev, {
+          x: 500,
+          y: GROUND_Y - OBSTACLE_HEIGHT,
+          width: OBSTACLE_WIDTH * 2.5,  // Increased width
+          height: OBSTACLE_HEIGHT,
+          isSpecial: true // Mark this as a special blue obstacle
+        }]);
+      }
+      
+      // Regular obstacle generation
+      if (elapsedTime < 13) {
+        if (currentTime - lastObstacleTimeRef.current >= nextObstacleIntervalRef.current) {
+          // Randomly select obstacle width
+          const randomValue = Math.random();
+          let obstacleWidth;
+          if (randomValue < 0.33) {
+            obstacleWidth = OBSTACLE_WIDTH;  // Regular width
+          } else if (randomValue < 0.66) {
+            obstacleWidth = OBSTACLE_WIDTH * 1.5;  // 1.5x width
+          } else {
+            obstacleWidth = OBSTACLE_WIDTH * 2;  // 2x width
+          }
 
-    // Create new bullets
-    if (Math.random() < 0.1) {
-      setBullets(prev => [...prev, {
-        x: ship.x + SHIP_WIDTH / 2,
-        y: ship.y
-      }]);
+          setObstacles(prev => [...prev, {
+            x: 500,
+            y: GROUND_Y - OBSTACLE_HEIGHT,
+            width: obstacleWidth,
+            height: OBSTACLE_HEIGHT
+          }]);
+          
+          lastObstacleTimeRef.current = currentTime;
+          // Set next interval randomly between 800-1200ms
+          nextObstacleIntervalRef.current = 800 + Math.random() * 400;
+        }
+      }
     }
 
-    // Create new enemies
-    if (Math.random() < 0.02) {
-      setEnemies(prev => [...prev, {
-        x: Math.random() * (500 - ENEMY_SIZE),
-        y: -ENEMY_SIZE
-      }]);
+    // Update score based on elapsed time
+    if (startTimeRef.current) {
+      const elapsedTime = (currentTime - startTimeRef.current) / 1000; // Convert to seconds
+      const newScore = elapsedTime < 2 ? 0 : Math.floor((elapsedTime - 2) * 800); // Start counting after 2 seconds
+      setScore(prev => ({
+        ...prev,
+        total: newScore
+      }));
+
+      if (elapsedTime >= 15) {  // 15 seconds
+        setGameState(GameState.AWAITINGNEXTLEVEL);
+      }
     }
-  }, [ship.x]);
+  }, [setGameState]);
 
   const checkCollisions = useCallback(() => {
-    // Check bullet-enemy collisions
-    bullets.forEach(bullet => {
-      enemies.forEach((enemy, enemyIndex) => {
-        if (
-          bullet.x < enemy.x + ENEMY_SIZE &&
-          bullet.x + BULLET_SIZE > enemy.x &&
-          bullet.y < enemy.y + ENEMY_SIZE &&
-          bullet.y + BULLET_SIZE > enemy.y
-        ) {
-          // Remove bullet and enemy
-          setBullets(prev => prev.filter(b => b !== bullet));
-          setEnemies(prev => prev.filter((_, i) => i !== enemyIndex));
-          
-          // Update score
-          setScore(prev => ({
-            points: getStartingScore(levelRef.current),
-            total: prev.total + prev.points
-          }));
-        }
-      });
-    });
+    // Check collision with obstacles
+    const hasCollision = obstacles.some(
+      (obstacle) =>
+        runner.x < obstacle.x + obstacle.width &&
+        runner.x + RUNNER_WIDTH > obstacle.x &&
+        runner.y < obstacle.y + obstacle.height &&
+        runner.y + RUNNER_HEIGHT > obstacle.y
+    );
 
-    // Check enemy-ship collision
-    enemies.forEach(enemy => {
-      if (
-        ship.x < enemy.x + ENEMY_SIZE &&
-        ship.x + SHIP_WIDTH > enemy.x &&
-        ship.y < enemy.y + ENEMY_SIZE &&
-        ship.y + SHIP_HEIGHT > enemy.y
-      ) {
-        setGameState(GameState.DEAD);
-      }
-    });
-  }, [bullets, enemies, ship, setGameState, setScore, getStartingScore]);
+    if (hasCollision) {
+      setGameState(GameState.DEAD);
+    }
+  }, [obstacles, runner, setGameState]);
 
   const updateScore = useCallback(() => {
     const scoreCtx = scoreCanvasRef.current?.getContext("2d");
@@ -655,7 +688,6 @@ const Sammy = () => {
       scoreCtx.font = "20px Pixelify Sans";
       scoreCtx.fillStyle = COLORS.black;
       scoreCtx.fillText(`Score: ${score.total}`, 10, 520);
-      scoreCtx.fillText(`Points: ${score.points}`, 200, 520);
       scoreCtx.fillText(`Level: ${level}`, 400, 520);
     }
   }, [level, score]);
@@ -665,34 +697,87 @@ const Sammy = () => {
       return;
     }
 
-    const ctx = sammyCanvasRef.current?.getContext("2d");
+    const ctx = runnerCanvasRef.current?.getContext("2d");
     if (ctx) {
       ctx.clearRect(0, 0, 500, 520);
 
-      // Draw ship
-      ctx.fillStyle = COLORS.blue;
-      ctx.fillRect(ship.x, ship.y, SHIP_WIDTH, SHIP_HEIGHT);
+      // Draw runner (stick figure)
+      ctx.strokeStyle = COLORS.blue;
+      ctx.lineWidth = 3;
+      
+      // Head
+      ctx.beginPath();
+      ctx.arc(runner.x + RUNNER_WIDTH/2, runner.y + 10, 8, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Body
+      ctx.beginPath();
+      ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 18);
+      ctx.lineTo(runner.x + RUNNER_WIDTH/2, runner.y + 35);
+      ctx.stroke();
+      
+      // Arms - Different poses for jumping and standing
+      if (runner.isJumping) {
+        // Jumping pose with wider arms
+        ctx.beginPath();
+        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 25);
+        ctx.lineTo(runner.x + RUNNER_WIDTH/2 - 20, runner.y + 35);
+        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 25);
+        ctx.lineTo(runner.x + RUNNER_WIDTH/2 + 20, runner.y + 35);
+        ctx.stroke();
+      } else {
+        // Standing pose with normal arms
+        ctx.beginPath();
+        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 25);
+        ctx.lineTo(runner.x + RUNNER_WIDTH/2 - 10, runner.y + 35);
+        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 25);
+        ctx.lineTo(runner.x + RUNNER_WIDTH/2 + 10, runner.y + 35);
+        ctx.stroke();
+      }
+      
+      // Legs - Different poses for jumping and standing
+      if (runner.isJumping) {
+        // Jumping pose with wider legs
+        ctx.beginPath();
+        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 35);
+        ctx.lineTo(runner.x + RUNNER_WIDTH/2 - 20, runner.y + 50);
+        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 35);
+        ctx.lineTo(runner.x + RUNNER_WIDTH/2 + 20, runner.y + 50);
+        ctx.stroke();
+      } else {
+        // Standing pose with normal legs
+        ctx.beginPath();
+        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 35);
+        ctx.lineTo(runner.x + RUNNER_WIDTH/2 - 12, runner.y + 50);
+        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 35);
+        ctx.lineTo(runner.x + RUNNER_WIDTH/2 + 12, runner.y + 50);
+        ctx.stroke();
+      }
 
-      // Draw bullets
+      // Draw obstacles
       ctx.fillStyle = COLORS.black;
-      bullets.forEach(bullet => {
-        ctx.fillRect(bullet.x, bullet.y, BULLET_SIZE, BULLET_SIZE);
-      });
-
-      // Draw enemies as BaseLogo
-      enemies.forEach(enemy => {
-        const img = new Image();
-        img.src = "data:image/svg+xml;base64," + btoa(`
-          <svg width="111" height="111" viewBox="0 0 111 111" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M54.921 110.034C85.359 110.034 110.034 85.402 110.034 55.017C110.034 24.6319 85.359 0 54.921 0C26.0432 0 2.35281 22.1714 0 50.3923H72.8467V59.6416H3.9565e-07C2.35281 87.8625 26.0432 110.034 54.921 110.034Z" fill="#0052FF"/>
-          </svg>
-        `);
-        ctx.drawImage(img, enemy.x, enemy.y, ENEMY_SIZE, ENEMY_SIZE);
+      obstacles.forEach(obstacle => {
+        if (obstacle.isSpecial) {
+          ctx.fillStyle = COLORS.blue; // Use blue for special obstacle
+          ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+          
+          // Draw text on blue obstacle
+          ctx.fillStyle = COLORS.white;
+          ctx.font = "bold 20px Arial";
+          ctx.textAlign = "center";
+          // Draw "Base" on first line
+          ctx.fillText("Base", obstacle.x + obstacle.width/2, obstacle.y + obstacle.height/2 - 3);
+          // Draw "Home" on second line
+          ctx.fillText("Home", obstacle.x + obstacle.width/2, obstacle.y + obstacle.height/2 + 17);
+        } else {
+          ctx.fillStyle = COLORS.black; // Use black for regular obstacles
+          ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+        }
       });
     }
 
     updateScore();
-  }, [gameState, ship, bullets, enemies, updateScore]);
+  }, [gameState, runner, obstacles, updateScore]);
 
   useGameLoop(() => {
     if (gameState === GameState.RUNNING) {
@@ -706,7 +791,7 @@ const Sammy = () => {
     } else if (gameState === GameState.AWAITINGNEXTLEVEL) {
       updateScore();
     }
-  }, [gameState, ship, bullets, enemies, score]);
+  }, [gameState, runner, obstacles, score]);
 
   const overlays = useMemo(() => {
     switch (gameState) {
@@ -762,8 +847,8 @@ const Sammy = () => {
           className="absolute top-0 left-0 z-3"
         />
         <canvas
-          ref={sammyCanvasRef}
-          id="sammy"
+          ref={runnerCanvasRef}
+          id="runner"
           width={500}
           height={500}
           className="absolute top-0 left-0 z-2"
@@ -780,15 +865,12 @@ const Sammy = () => {
 
       <div className="flex mt-6">
         <div className="flex flex-1 justify-center">
-          <DPad
-            onDirectionChange={(direction: number) => {
-              if (direction === MoveState.LEFT) {
-                moveShip(ship.x - SHIP_MOVE_SPEED);
-              } else if (direction === MoveState.RIGHT) {
-                moveShip(ship.x + SHIP_MOVE_SPEED);
-              }
-            }}
-          />
+          <button
+            className="h-12 w-24 bg-black rounded-lg hover:shadow-dpad-hover active:shadow-dpad-pressed active:translate-y-[1px] bg-dpad-gradient shadow-dpad"
+            onClick={jump}
+          >
+            JUMP
+          </button>
         </div>
         <div className="flex flex-1 relative">
           <ControlButtons
@@ -801,4 +883,4 @@ const Sammy = () => {
   );
 };
 
-export default Sammy;
+export default Run;

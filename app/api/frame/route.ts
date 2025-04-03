@@ -2,12 +2,12 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   return NextResponse.json({
-    name: "Snake Game Frame",
-    description: "Play Snake on Warpcast!",
-    image: `${process.env.NEXT_PUBLIC_HOST}/snake.png`,
+    name: "Run Game Frame",
+    description: "Play Run on Warpcast!",
+    image: `${process.env.NEXT_PUBLIC_HOST}/run.png`,
     buttons: [
       {
-        label: "Play Snake",
+        label: "Play Run",
         action: "post"
       },
       {

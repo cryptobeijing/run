@@ -7,7 +7,7 @@ import {
 } from "@coinbase/onchainkit/minikit";
 import { Name, Identity, Badge } from "@coinbase/onchainkit/identity";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Snake from "./components/snake";
+import Run from "./components/run";
 import { useAccount } from "wagmi";
 import Check from "./svg/Check";
 
@@ -59,7 +59,7 @@ export default function App() {
   }, [context, handleAddFrame, frameAdded]);
 
   return (
-    <div className="flex flex-col min-h-screen sm:min-h-[820px] font-sans bg-[#E5E5E5] text-black items-center snake-dark relative">
+    <div className="flex flex-col min-h-screen sm:min-h-[820px] font-sans bg-[#E5E5E5] text-black items-center run-dark relative">
       <div className="w-screen max-w-[520px]">
         <header className="mr-2 mt-1 flex justify-between">
           <div className="justify-start pl-1">
@@ -86,7 +86,7 @@ export default function App() {
         </header>
 
         <main className="font-serif">
-          <Snake />
+          <Run />
         </main>
 
         <footer className="absolute bottom-4 flex items-center w-screen max-w-[520px] justify-center">
