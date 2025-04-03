@@ -41,7 +41,6 @@ const COLORS = {
 };
 
 // New game constants
-const GAME_WIDTH = 500;
 const GAME_HEIGHT = 300;
 const GROUND_Y = GAME_HEIGHT - 50 + 95 + 35;
 const RUNNER_WIDTH = 30;
@@ -53,9 +52,6 @@ const OBSTACLE_HEIGHT = 40;
 const OBSTACLE_SPEED = 4;
 const GRAVITY = 0.4;
 const JUMP_FORCE = -10;
-
-// Update movement speed
-const RUNNER_MOVE_SPEED = 5;
 
 const GameState = {
   INTRO: 0,
@@ -253,40 +249,6 @@ function ControlButtons({
   );
 }
 
-type DPadProps = {
-  onDirectionChange: (direction: number) => void;
-};
-
-function DPad({ onDirectionChange }: DPadProps) {
-  return (
-    <div className="flex">
-      <div className="grid grid-cols-3">
-        <div className="h-12 w-12" />
-        <button
-          className="h-12 w-12 bg-black rounded-t-lg hover:shadow-dpad-hover active:shadow-dpad-pressed active:translate-y-[1px] bg-dpad-gradient shadow-dpad"
-          onClick={() => onDirectionChange(MoveState.UP)}
-        />
-        <div className="h-12 w-12" />
-        <button
-          className="h-12 w-12 bg-black rounded-t-lg hover:shadow-dpad-hover active:shadow-dpad-pressed active:translate-x-[1px] bg-dpad-gradient -rotate-90"
-          onClick={() => onDirectionChange(MoveState.LEFT)}
-        />
-        <div className="h-12 w-12 bg-black" />
-        <button
-          className="h-12 w-12 bg-black rounded-t-lg hover:shadow-dpad-hover active:shadow-dpad-pressed active:translate-x-[-1px] bg-dpad-gradient shadow-dpad rotate-90"
-          onClick={() => onDirectionChange(MoveState.RIGHT)}
-        />
-        <div className="h-12 w-12" />
-        <button
-          className="h-12 w-12 bg-black rounded-t-lg hover:shadow-dpad-hover active:shadow-dpad-pressed active:translate-y-[-1px] bg-dpad-gradient shadow-dpad rotate-180"
-          onClick={() => onDirectionChange(MoveState.DOWN)}
-        />
-        <div className="h-12 w-12" />
-      </div>
-    </div>
-  );
-}
-
 type StatsProps = {
   score: number;
   level: number;
@@ -441,30 +403,31 @@ const Run = () => {
   const startTimeRef = useRef<number | null>(null);
   const lastObstacleTimeRef = useRef<number | null>(null);
   const nextObstacleIntervalRef = useRef<number>(1000);
-  const passedObstaclesRef = useRef<Set<string>>(new Set());
-
-  const [gameState, setGameState] = useState(GameState.INTRO);
-  const [level, setLevel] = useState(1);
-  const [score, setScore] = useState({ points: 2000, total: 0 });
-  const [runner, setRunner] = useState<Runner>({
+  const runnerRef = useRef<Runner>({
     x: RUNNER_X_POSITION,
     y: RUNNER_Y_POSITION,
     velocityY: 0,
-    isJumping: false
+    isJumping: false,
   });
-  const [obstacles, setObstacles] = useState<Obstacle[]>([]);
-  const [scale, setScale] = useState<number | null>(null);
-  const { konami } = useKonami(gameState);
+  const [gameState, setGameState] = useState(GameState.INTRO);
+  const [level, setLevel] = useState(1);
+  const [score, setScore] = useState({ total: 0, current: 0 });
+  const [isWin, setIsWin] = useState(false);
+  const [konami, setKonami] = useState(false);
+  const [scale, setScale] = useState(1);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationFrameRef = useRef<number>();
+  const lastTimeRef = useRef<number>(0);
+  const obstaclesRef = useRef<Obstacle[]>([]);
+
+  const { konami: konamiFromUseKonami, updateSequence } = useKonami(gameState);
 
   const jump = useCallback(() => {
-    if (!runner.isJumping && gameState === GameState.RUNNING) {
-      setRunner(prev => ({
-        ...prev,
-        velocityY: JUMP_FORCE,
-        isJumping: true
-      }));
+    if (!runnerRef.current.isJumping && gameState === GameState.RUNNING) {
+      runnerRef.current.velocityY = JUMP_FORCE;
+      runnerRef.current.isJumping = true;
     }
-  }, [runner.isJumping, gameState]);
+  }, [gameState]);
 
   const getStartingScore = useCallback(
     (level: number, adjust = false) => {
@@ -492,14 +455,14 @@ const Run = () => {
         case GameState.DEAD:
         case GameState.AWAITINGNEXTLEVEL:
           // Reset all game state
-          setRunner({
+          runnerRef.current = {
             x: RUNNER_X_POSITION,
             y: RUNNER_Y_POSITION,
             velocityY: 0,
             isJumping: false
-          });
-          setScore({ points: getStartingScore(1), total: 0 });
-          setObstacles([]);
+          };
+          setScore({ total: getStartingScore(1), current: 0 });
+          obstaclesRef.current = [];
           setLevel(1);
           startTimeRef.current = null;
           lastObstacleTimeRef.current = null;
@@ -536,12 +499,9 @@ const Run = () => {
       if (e.code === "Space") {
         e.preventDefault(); // Prevent space from triggering any other actions
         // Make space key function exactly like the jump button
-        if (!runner.isJumping && gameState === GameState.RUNNING) {
-          setRunner(prev => ({
-            ...prev,
-            velocityY: JUMP_FORCE,
-            isJumping: true
-          }));
+        if (!runnerRef.current.isJumping && gameState === GameState.RUNNING) {
+          runnerRef.current.velocityY = JUMP_FORCE;
+          runnerRef.current.isJumping = true;
         }
       } else if (e.code === "Enter") {
         e.preventDefault(); // Prevent enter from triggering any other actions
@@ -552,7 +512,7 @@ const Run = () => {
 
     window.addEventListener("keydown", handleKeyPress);
     return () => window.removeEventListener("keydown", handleKeyPress);
-  }, [updateGameState, gameState, runner.isJumping]);
+  }, [updateGameState, gameState, runnerRef.current.isJumping]);
 
   const drawMap = useCallback(() => {
     const ctx = mapCanvasRef.current?.getContext("2d");
@@ -581,26 +541,15 @@ const Run = () => {
 
   const updateGame = useCallback(() => {
     // Update runner position with gravity
-    setRunner(prev => {
-      const newVelocityY = prev.velocityY + GRAVITY;
-      const newY = Math.min(GROUND_Y - RUNNER_HEIGHT, prev.y + newVelocityY);
-      const isOnGround = newY >= GROUND_Y - RUNNER_HEIGHT;
-      
-      return {
-        ...prev,
-        y: newY,
-        velocityY: isOnGround ? 0 : newVelocityY,
-        isJumping: !isOnGround
-      };
-    });
+    runnerRef.current.y = Math.min(GROUND_Y - RUNNER_HEIGHT, runnerRef.current.y + runnerRef.current.velocityY);
+    runnerRef.current.velocityY += GRAVITY;
+    runnerRef.current.isJumping = runnerRef.current.y < GROUND_Y - RUNNER_HEIGHT;
 
     // Move obstacles
-    setObstacles(prev =>
-      prev.map(obstacle => ({
-        ...obstacle,
-        x: obstacle.x - OBSTACLE_SPEED
-      })).filter(obstacle => obstacle.x + obstacle.width > 0)
-    );
+    obstaclesRef.current = obstaclesRef.current.map(obstacle => ({
+      ...obstacle,
+      x: obstacle.x - OBSTACLE_SPEED
+    })).filter(obstacle => obstacle.x + obstacle.width > 0);
 
     // Create new obstacles with random timing and width
     const currentTime = performance.now();
@@ -613,14 +562,14 @@ const Run = () => {
       const elapsedTime = (currentTime - startTimeRef.current) / 1000;
       
       // Additional blue obstacle at 13.5 seconds
-      if (elapsedTime >= 13.5 && elapsedTime < 13.6 && !obstacles.some(obs => obs.x === 500)) {
-        setObstacles(prev => [...prev, {
+      if (elapsedTime >= 13.5 && elapsedTime < 13.6 && !obstaclesRef.current.some(obs => obs.x === 500)) {
+        obstaclesRef.current = [...obstaclesRef.current, {
           x: 500,
           y: GROUND_Y - OBSTACLE_HEIGHT,
           width: OBSTACLE_WIDTH * 2.5,  // Increased width
           height: OBSTACLE_HEIGHT,
           isSpecial: true // Mark this as a special blue obstacle
-        }]);
+        }];
       }
       
       // Regular obstacle generation
@@ -637,12 +586,12 @@ const Run = () => {
             obstacleWidth = OBSTACLE_WIDTH * 2;  // 2x width
           }
 
-          setObstacles(prev => [...prev, {
+          obstaclesRef.current = [...obstaclesRef.current, {
             x: 500,
             y: GROUND_Y - OBSTACLE_HEIGHT,
             width: obstacleWidth,
             height: OBSTACLE_HEIGHT
-          }]);
+          }];
           
           lastObstacleTimeRef.current = currentTime;
           // Set next interval randomly between 800-1200ms
@@ -668,18 +617,18 @@ const Run = () => {
 
   const checkCollisions = useCallback(() => {
     // Check collision with obstacles
-    const hasCollision = obstacles.some(
+    const hasCollision = obstaclesRef.current.some(
       (obstacle) =>
-        runner.x < obstacle.x + obstacle.width &&
-        runner.x + RUNNER_WIDTH > obstacle.x &&
-        runner.y < obstacle.y + obstacle.height &&
-        runner.y + RUNNER_HEIGHT > obstacle.y
+        runnerRef.current.x < obstacle.x + obstacle.width &&
+        runnerRef.current.x + RUNNER_WIDTH > obstacle.x &&
+        runnerRef.current.y < obstacle.y + obstacle.height &&
+        runnerRef.current.y + RUNNER_HEIGHT > obstacle.y
     );
 
     if (hasCollision) {
       setGameState(GameState.DEAD);
     }
-  }, [obstacles, runner, setGameState]);
+  }, [obstaclesRef, runnerRef, setGameState]);
 
   const updateScore = useCallback(() => {
     const scoreCtx = scoreCanvasRef.current?.getContext("2d");
@@ -707,56 +656,56 @@ const Run = () => {
       
       // Head
       ctx.beginPath();
-      ctx.arc(runner.x + RUNNER_WIDTH/2, runner.y + 10, 8, 0, Math.PI * 2);
+      ctx.arc(runnerRef.current.x + RUNNER_WIDTH/2, runnerRef.current.y + 10, 8, 0, Math.PI * 2);
       ctx.stroke();
       
       // Body
       ctx.beginPath();
-      ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 18);
-      ctx.lineTo(runner.x + RUNNER_WIDTH/2, runner.y + 35);
+      ctx.moveTo(runnerRef.current.x + RUNNER_WIDTH/2, runnerRef.current.y + 18);
+      ctx.lineTo(runnerRef.current.x + RUNNER_WIDTH/2, runnerRef.current.y + 35);
       ctx.stroke();
       
       // Arms - Different poses for jumping and standing
-      if (runner.isJumping) {
+      if (runnerRef.current.isJumping) {
         // Jumping pose with wider arms
         ctx.beginPath();
-        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 25);
-        ctx.lineTo(runner.x + RUNNER_WIDTH/2 - 20, runner.y + 35);
-        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 25);
-        ctx.lineTo(runner.x + RUNNER_WIDTH/2 + 20, runner.y + 35);
+        ctx.moveTo(runnerRef.current.x + RUNNER_WIDTH/2, runnerRef.current.y + 25);
+        ctx.lineTo(runnerRef.current.x + RUNNER_WIDTH/2 - 20, runnerRef.current.y + 35);
+        ctx.moveTo(runnerRef.current.x + RUNNER_WIDTH/2, runnerRef.current.y + 25);
+        ctx.lineTo(runnerRef.current.x + RUNNER_WIDTH/2 + 20, runnerRef.current.y + 35);
         ctx.stroke();
       } else {
         // Standing pose with normal arms
         ctx.beginPath();
-        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 25);
-        ctx.lineTo(runner.x + RUNNER_WIDTH/2 - 10, runner.y + 35);
-        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 25);
-        ctx.lineTo(runner.x + RUNNER_WIDTH/2 + 10, runner.y + 35);
+        ctx.moveTo(runnerRef.current.x + RUNNER_WIDTH/2, runnerRef.current.y + 25);
+        ctx.lineTo(runnerRef.current.x + RUNNER_WIDTH/2 - 10, runnerRef.current.y + 35);
+        ctx.moveTo(runnerRef.current.x + RUNNER_WIDTH/2, runnerRef.current.y + 25);
+        ctx.lineTo(runnerRef.current.x + RUNNER_WIDTH/2 + 10, runnerRef.current.y + 35);
         ctx.stroke();
       }
       
       // Legs - Different poses for jumping and standing
-      if (runner.isJumping) {
+      if (runnerRef.current.isJumping) {
         // Jumping pose with wider legs
         ctx.beginPath();
-        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 35);
-        ctx.lineTo(runner.x + RUNNER_WIDTH/2 - 20, runner.y + 50);
-        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 35);
-        ctx.lineTo(runner.x + RUNNER_WIDTH/2 + 20, runner.y + 50);
+        ctx.moveTo(runnerRef.current.x + RUNNER_WIDTH/2, runnerRef.current.y + 35);
+        ctx.lineTo(runnerRef.current.x + RUNNER_WIDTH/2 - 20, runnerRef.current.y + 50);
+        ctx.moveTo(runnerRef.current.x + RUNNER_WIDTH/2, runnerRef.current.y + 35);
+        ctx.lineTo(runnerRef.current.x + RUNNER_WIDTH/2 + 20, runnerRef.current.y + 50);
         ctx.stroke();
       } else {
         // Standing pose with normal legs
         ctx.beginPath();
-        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 35);
-        ctx.lineTo(runner.x + RUNNER_WIDTH/2 - 12, runner.y + 50);
-        ctx.moveTo(runner.x + RUNNER_WIDTH/2, runner.y + 35);
-        ctx.lineTo(runner.x + RUNNER_WIDTH/2 + 12, runner.y + 50);
+        ctx.moveTo(runnerRef.current.x + RUNNER_WIDTH/2, runnerRef.current.y + 35);
+        ctx.lineTo(runnerRef.current.x + RUNNER_WIDTH/2 - 12, runnerRef.current.y + 50);
+        ctx.moveTo(runnerRef.current.x + RUNNER_WIDTH/2, runnerRef.current.y + 35);
+        ctx.lineTo(runnerRef.current.x + RUNNER_WIDTH/2 + 12, runnerRef.current.y + 50);
         ctx.stroke();
       }
 
       // Draw obstacles
       ctx.fillStyle = COLORS.black;
-      obstacles.forEach(obstacle => {
+      obstaclesRef.current.forEach(obstacle => {
         if (obstacle.isSpecial) {
           ctx.fillStyle = COLORS.blue; // Use blue for special obstacle
           ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
@@ -777,7 +726,7 @@ const Run = () => {
     }
 
     updateScore();
-  }, [gameState, runner, obstacles, updateScore]);
+  }, [gameState, runnerRef, obstaclesRef, updateScore]);
 
   useGameLoop(() => {
     if (gameState === GameState.RUNNING) {
@@ -786,12 +735,12 @@ const Run = () => {
       drawGame();
       setScore((prev) => ({
         ...prev,
-        points: Math.max(0, prev.points - (konami ? 1 : 2)),
+        current: Math.max(0, prev.current - (konami ? 1 : 2)),
       }));
     } else if (gameState === GameState.AWAITINGNEXTLEVEL) {
       updateScore();
     }
-  }, [gameState, runner, obstacles, score]);
+  }, [gameState, runnerRef, obstaclesRef, score]);
 
   const overlays = useMemo(() => {
     switch (gameState) {
@@ -812,7 +761,7 @@ const Run = () => {
       default:
         return null;
     }
-  }, [gameState, konami, level, score.total, setGameState, updateGameState]);
+  }, [gameState, konami, level, score.total, updateGameState]);
 
   if (!scale) {
     return (
